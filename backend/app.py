@@ -84,7 +84,7 @@ def gas_usage():
 def intensity_metrics():
     try:
         # Load energy and water usage data
-        energy_data = pd.read_csv('energy_data.csv')
+        energy_data = pd.read_csv('electric_data.csv')
         water_data = pd.read_csv('water_data.csv')
         
         # Building area (in square feet)

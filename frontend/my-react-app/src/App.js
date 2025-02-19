@@ -4,7 +4,7 @@ const Dashboard = () => {
     const [gasData, setGasData] = useState({});
 
     useEffect(() => {
-        fetch('http://127.0.0.1:5000/api/gas-usage')
+        fetch('/api/gas-usage')
             .then(response => response.json())
             .then(data => setGasData(data))
             .catch(error => console.error('Error fetching gas usage data:', error));
