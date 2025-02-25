@@ -1,8 +1,9 @@
-#
 from flask import Flask, jsonify
+from flask_cors import CORS
 import pandas as pd
 
 app = Flask(__name__)
+CORS(app)
 
 # Root route
 @app.route('/', methods=['GET'])
@@ -15,26 +16,28 @@ def gas_usage():
     try:
         # Load gas usage data from CSV file
         gas_data = pd.read_csv('gas_data.csv')
-        
-        # Calculate total gas usage
-        total_gas_usage = gas_data['Usage/CCF'].sum()
-        
-        # Calculate average daily gas usage
-        num_days = len(gas_data)
-        daily_avg_gas = total_gas_usage / num_days if num_days else 0
-        
-        # Calculate CO₂ emissions
-        total_emissions_kg = total_gas_usage * 0.0545  # Conversion factor for natural gas
-        total_emissions_ton = total_emissions_kg / 1000  # Convert to metric tons
 
-        # Return results as JSON
-        return jsonify({
-            "total_gas_usage": total_gas_usage,
-            "daily_avg_gas": daily_avg_gas,
-            "total_emissions_kg": total_emissions_kg,
-            "total_emissions_ton": total_emissions_ton
-        })
-    
+        # Convert 'Month' to datetime
+        gas_data['Month'] = pd.to_datetime(gas_data['Month'], format='%m/%d/%Y')
+
+        # Initialize an empty list to store the transformed data
+        transformed_data = []
+
+        # Iterate over each row in the DataFrame
+        for index, row in gas_data.iterrows():
+            # Create a dictionary for each data point
+            data_point = {
+                "date": row['Month'].strftime('%Y-%m-%d'),
+                "total_gas_usage": row['Usage/CCF'],
+                "daily_avg_gas": row['Usage/CCF'],  # Assuming daily average is the same as monthly usage
+                "total_emissions_ton": row['Usage/CCF'] * 0.0545 / 1000  # Conversion factor for natural gas
+            }
+            # Append the data point to the list
+            transformed_data.append(data_point)
+
+        # Return the transformed data as JSON
+        return jsonify(transformed_data)
+
     except FileNotFoundError:
         return jsonify({"error": "gas_data.csv file not found"}), 404
     except Exception as e:
