@@ -1,46 +1,90 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
+
+const months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
 
 const Dashboard = () => {
   const [gasData, setGasData] = useState([]);
   const [energyData, setEnergyData] = useState([]);
   const [gasMultiplier, setGasMultiplier] = useState(1);
   const [energyMultiplier, setEnergyMultiplier] = useState(1);
+  const [selectedMonths, setSelectedMonths] = useState([]);
 
   useEffect(() => {
-    // Fetch gas usage data
     fetch('http://localhost:5000/api/gas-usage')
-      .then((response) => response.json())
+      .then((res) => res.json())
       .then((data) => setGasData(data))
-      .catch((error) => console.error('Error fetching gas usage data:', error));
+      .catch((err) => console.error('Gas error:', err));
 
-    // Fetch energy baseline data
     fetch('http://localhost:5000/api/energy-baseline')
-      .then((response) => response.json())
+      .then((res) => res.json())
       .then((data) => setEnergyData(data.data))
-      .catch((error) => console.error('Error fetching energy baseline data:', error));
+      .catch((err) => console.error('Energy error:', err));
   }, []);
 
-  // Adjust data based on slider values
+  const isMonthSelected = (date) => {
+    const month = new Date(date).getMonth();
+    return selectedMonths.includes(month);
+  };
+
+  const getAverage = (data, key) => (
+    data.reduce((sum, item) => sum + item[key], 0) / data.length
+  );
+
+  const gasAverage = getAverage(gasData, 'total_gas_usage') || 0;
+  const energyAverage = getAverage(energyData, 'total_kwh') || 0;
+
   const adjustedGasData = gasData.map((item) => ({
     ...item,
-    total_gas_usage: item.total_gas_usage * gasMultiplier,
-    daily_avg_gas: item.daily_avg_gas * gasMultiplier,
-    total_emissions_ton: item.total_emissions_ton * gasMultiplier,
+    total_gas_usage: isMonthSelected(item.date) ? item.total_gas_usage * gasMultiplier : item.total_gas_usage,
+    daily_avg_gas: isMonthSelected(item.date) ? item.daily_avg_gas * gasMultiplier : item.daily_avg_gas,
+    total_emissions_ton: isMonthSelected(item.date) ? item.total_emissions_ton * gasMultiplier : item.total_emissions_ton,
+    avg_usage: gasAverage,
   }));
 
   const adjustedEnergyData = energyData.map((item) => ({
     ...item,
-    total_kwh: item.total_kwh * energyMultiplier,
-    daily_avg_kwh: item.daily_avg_kwh * energyMultiplier,
+    total_kwh: isMonthSelected(item.date) ? item.total_kwh * energyMultiplier : item.total_kwh,
+    daily_avg_kwh: isMonthSelected(item.date) ? item.daily_avg_kwh * energyMultiplier : item.daily_avg_kwh,
+    avg_usage: energyAverage,
   }));
+
+  const handleMonthSelect = (e) => {
+    const value = parseInt(e.target.value);
+    setSelectedMonths((prev) =>
+      prev.includes(value) ? prev.filter((m) => m !== value) : [...prev, value]
+    );
+  };
 
   return (
     <div className="dashboard">
-      <h1>Energy Monitoring Dashboard</h1>
+      <h1 className="dashboard-title">Energy Monitoring Dashboard</h1>
+
+      <div className="month-selector">
+        <h3>Select Months to Adjust:</h3>
+        <div className="month-grid">
+          {months.map((m, i) => (
+            <label key={i}>
+              <input
+                type="checkbox"
+                value={i}
+                checked={selectedMonths.includes(i)}
+                onChange={handleMonthSelect}
+              />
+              {m}
+            </label>
+          ))}
+        </div>
+      </div>
 
       {/* Gas Usage Section */}
-      <section>
+      <section className="card">
         <h2>Gas Usage</h2>
         <label>
           Adjust Gas Usage:
@@ -54,7 +98,7 @@ const Dashboard = () => {
           />
           {gasMultiplier.toFixed(2)}
         </label>
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="90%" height={250}>
           <LineChart data={adjustedGasData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
@@ -64,13 +108,14 @@ const Dashboard = () => {
             <Line type="monotone" dataKey="total_gas_usage" stroke="#ff7300" />
             <Line type="monotone" dataKey="daily_avg_gas" stroke="#387908" />
             <Line type="monotone" dataKey="total_emissions_ton" stroke="#8884d8" />
+            <Line type="monotone" dataKey="avg_usage" stroke="#999" strokeDasharray="5 5" dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </section>
 
-      {/* Energy Baseline Section */}
-      <section>
-        <h2>Energy Baseline</h2>
+      {/* Energy Section */}
+      <section className="card">
+        <h2>Electricity Usage</h2>
         <label>
           Adjust Energy Usage:
           <input
@@ -83,7 +128,7 @@ const Dashboard = () => {
           />
           {energyMultiplier.toFixed(2)}
         </label>
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="90%" height={250}>
           <LineChart data={adjustedEnergyData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
@@ -92,6 +137,7 @@ const Dashboard = () => {
             <Legend />
             <Line type="monotone" dataKey="total_kwh" stroke="#8884d8" />
             <Line type="monotone" dataKey="daily_avg_kwh" stroke="#82ca9d" />
+            <Line type="monotone" dataKey="avg_usage" stroke="#999" strokeDasharray="5 5" dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </section>

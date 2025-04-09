@@ -1,6 +1,7 @@
   // src/App.jsx
   import React from 'react';
   import Dashboard from './components/Dashboard';
+  import './App.css';
 
   const App = () => {
     return (
