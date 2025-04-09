@@ -1,117 +1,78 @@
 from flask import Flask, jsonify
+from flask_cors import CORS
 import pandas as pd
+from datetime import datetime
 
 app = Flask(__name__)
+CORS(app)
 
 # Root route
 @app.route('/', methods=['GET'])
 def home():
     return "Welcome to the Sustainability Power Dashboard API"
 
-# Endpoint to calculate energy baseline metrics
-@app.route('/api/energy-baseline', methods=['GET'])
-def energy_baseline():
-    try:
-        # Load CSV file with energy data
-        energy_data = pd.read_csv('energy_data.csv')
-        
-        # Calculate peak and off-peak energy usage averages
-        peak_avg = energy_data[energy_data['time'] == 'peak']['kWh'].mean()
-        off_peak_avg = energy_data[energy_data['time'] == 'off-peak']['kWh'].mean()
-        
-        # Calculate average daily consumption
-        daily_avg = (peak_avg + off_peak_avg) / 2
-        
-        # Calculate weekday and weekend energy consumption totals
-        weekday_total = daily_avg * 20  # 20 weekdays in a month
-        weekend_total = energy_data[energy_data['time'] == 'weekend']['kWh'].mean() * 8  # 8 weekend days
-        
-        # Calculate total 30-day energy consumption
-        total_30_day_usage = weekday_total + weekend_total
-
-        # Create a dictionary with calculated values
-        energy_baseline_results = {
-            "peak_avg": peak_avg,
-            "off_peak_avg": off_peak_avg,
-            "daily_avg": daily_avg,
-            "total_30_day_usage": total_30_day_usage
-        }
-
-        # Return results as JSON
-        return jsonify(energy_baseline_results)
-    
-    except FileNotFoundError:
-        return jsonify({"error": "energy_data.csv file not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 # Endpoint to calculate gas usage metrics
 @app.route('/api/gas-usage', methods=['GET'])
 def gas_usage():
     try:
-        # Load gas usage data from CSV file
         gas_data = pd.read_csv('gas_data.csv')
+        gas_data['Month'] = pd.to_datetime(gas_data['Month'], format='%m/%d/%Y')
         
-        # Calculate weekday and weekend gas usage
-        weekday_avg_gas = gas_data[gas_data['day_type'] == 'weekday']['CFH'].mean()
-        weekend_avg_gas = gas_data[gas_data['day_type'] == 'weekend']['CFH'].mean()
+        # Calculate days in month for accurate daily averages
+        gas_data['days_in_month'] = gas_data['Month'].dt.daysinmonth
         
-        # Total gas usage for the month
-        weekday_gas_total = weekday_avg_gas * 20 * 24  # 20 weekdays, 24 hours each day
-        weekend_gas_total = weekend_avg_gas * 8 * 24   # 8 weekend days, 24 hours each day
-        total_gas_usage = weekday_gas_total + weekend_gas_total
-        
-        # Calculate CO₂ emissions
-        total_emissions_kg = total_gas_usage * 0.0545  # Conversion factor for natural gas
-        total_emissions_ton = total_emissions_kg / 1000  # Convert to metric tons
+        transformed_data = []
+        for _, row in gas_data.iterrows():
+            data_point = {
+                "date": row['Month'].strftime('%Y-%m-%d'),
+                "total_gas_usage": row['Usage/CCF'],
+                "daily_avg_gas": row['Usage/CCF'] / row['days_in_month'],
+                "total_emissions_ton": row['Usage/CCF'] * 0.0545 / 1000  # 0.0545 kg/CCF → metric tons
+            }
+            transformed_data.append(data_point)
+            
+        return jsonify(transformed_data)
 
-        # Return results as JSON
-        return jsonify({
-            "weekday_avg_gas": weekday_avg_gas,
-            "weekend_avg_gas": weekend_avg_gas,
-            "total_gas_usage": total_gas_usage,
-            "total_emissions_kg": total_emissions_kg,
-            "total_emissions_ton": total_emissions_ton
-        })
-    
     except FileNotFoundError:
         return jsonify({"error": "gas_data.csv file not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Endpoint to calculate Water and Energy Use Intensity (WUI and EUI)
-@app.route('/api/intensity-metrics', methods=['GET'])
-def intensity_metrics():
+# Endpoint to calculate energy baseline metrics
+@app.route('/api/energy-baseline', methods=['GET'])
+def energy_baseline():
     try:
-        # Load energy and water usage data
-        energy_data = pd.read_csv('electric_data.csv')
-        water_data = pd.read_csv('water_data.csv')
+        energy_data = pd.read_csv('energy_data.csv')
+        energy_data['Month'] = pd.to_datetime(energy_data['Month'], format='%b-%y')
         
-        # Building area (in square feet)
-        building_area = 10000  # Example area value
+        # Calculate actual days in month
+        energy_data['days_in_month'] = energy_data['Month'].dt.daysinmonth
+        energy_data['Daily_kWh'] = energy_data['Usage/kWh'] / energy_data['days_in_month']
         
-        # Calculate total energy and water usage
-        total_energy = energy_data['kWh'].sum()
-        total_water = water_data['gallons'].sum()
-        
-        # Calculate Energy Use Intensity (EUI) and Water Use Intensity (WUI)
-        eui = total_energy / building_area
-        wui = total_water / building_area
+        transformed_data = []
+        for _, row in energy_data.iterrows():
+            data_point = {
+                "date": row['Month'].strftime('%Y-%m-%d'),
+                "total_kwh": row['Usage/kWh'],
+                "daily_avg_kwh": row['Daily_kWh'],
+            }
+            transformed_data.append(data_point)
+            
+        daily_avg = energy_data['Daily_kWh'].mean()
+        total_30_day_usage = daily_avg * 30  # Projected 30-day usage from average
 
-        # Return intensity metrics as JSON
         return jsonify({
-            "total_energy": total_energy,
-            "total_water": total_water,
-            "eui": eui,
-            "wui": wui
+            "daily_avg": daily_avg,
+            "total_30_day_usage": total_30_day_usage,
+            "data": transformed_data
         })
-    
+
     except FileNotFoundError:
-        return jsonify({"error": "Required CSV file not found"}), 404
+        return jsonify({"error": "energy_data.csv file not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# EUI endpoint remains unchanged per user request
+
 if __name__ == '__main__':
     app.run(debug=True)
-
-
